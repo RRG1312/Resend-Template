@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 interface FormData {
   name: string;
@@ -18,6 +19,8 @@ export default function ContactForm() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -27,8 +30,18 @@ export default function ContactForm() {
     }));
   };
 
+  const handleRecaptchaChange = (token: string | null) => {
+    setRecaptchaToken(token);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!recaptchaToken) {
+      setMessage('Error: Please complete the reCAPTCHA verification');
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage('');
 
@@ -38,7 +51,7 @@ export default function ContactForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, recaptchaToken }),
       });
 
       if (response.ok) {
@@ -49,11 +62,13 @@ export default function ContactForm() {
           email: '',
           description: ''
         });
+        setRecaptchaToken(null);
+        recaptchaRef.current?.reset();
       } else {
         const errorData = await response.json();
         setMessage(`Error: ${errorData.error}`);
       }
-    } catch (error) {
+    } catch {
       setMessage('Error: Failed to send email');
     } finally {
       setIsSubmitting(false);
@@ -126,9 +141,18 @@ export default function ContactForm() {
           />
         </div>
 
+        <div className="mb-4">
+          <ReCAPTCHA
+            ref={recaptchaRef}
+            sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
+            onChange={handleRecaptchaChange}
+            theme="light"
+          />
+        </div>
+
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !recaptchaToken}
           className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? 'Sending...' : 'Send Email'}
